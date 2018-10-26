@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\UserResource;
 use App\User;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class HomeController extends Controller
@@ -26,8 +25,11 @@ class HomeController extends Controller
      */
     public function index()
     {
-//        return UserResource::collection(User::all());
-//        return new UserResource(Auth::user());
         return view('home');
+    }
+
+    public function getFriends()
+    {
+        return UserResource::collection(User::all()->where('id','!=',Auth::id()));
     }
 }
