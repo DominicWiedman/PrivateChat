@@ -24,11 +24,15 @@
             <!-- Options ends-->
         </div>
         <div class="card-body" v-chat-scroll>
-            <p class="card-text" v-for="chat in chats" :key="chat.message">{{chat.message}}</p>
+            <p class="card-text" :class="{'text-right': chat.type == 0, 'text-success':chat.read_at != null}" v-for="chat in chats" :key="chat.id">{{chat.message}}
+                <br>
+                <span style="font-size: 8px">{{chat.read_at}}</span>
+            </p>
+            <br>
         </div>
         <form class="card-footer" @submit.prevent="send">
             <div class="form-group">
-                <input type="text" class="form-control" placeholder="Write your message here..." :disabled="session_block">
+                <input type="text" class="form-control" placeholder="Write your message here..." :disabled="session_block" v-model="message">
             </div>
         </form>
     </div>
@@ -40,44 +44,60 @@
         data(){
             return {
                 chats:[],
+                message:[],
                 session_block:false
             }
         },
         methods:{
             send(){
-                console.log('hello')
+                if (this.message){
+                    this.pushToChats(this.message);
+                    axios.post(`send/${this.friend.session.id}`, {
+                        letter : this.message,
+                        to_user : this.friend.id,
+                    }).then(res => (this.chats[this.chats.length -1].id = res.data));
+                    this.message = null;
+                }
+            },
+            pushToChats(message){
+                this.chats.push({ message:message, type:0, read_at:null, sent_at:'Just Now' });
             },
             close(){
                 this.$emit('close');
             },
             clear(){
-                this.chats = []
+                axios.post(`session/${this.friend.session.id}/clear`).then(res => (this.chats =[]))
             },
             block(){
                 this.session_block = true
             },
             unblock(){
                 this.session_block = false
+            },
+            getAllMessages(){
+                axios
+                    .post(`session/${this.friend.session.id}/chats`)
+                    .then(res => (this.chats = res.data.data));
+            },
+            read(){
+                axios.post(`session/${this.friend.session.id}/read`)
             }
         },
         created(){
-            this.chats.push(
-                {message:'heyy'},
-                {message:'How are you?'},
-                {message:'how u dopisdn?'},
-                {message:'how u dopsisdn?'},
-                {message:'how u doosdin?'},
-                {message:'how u doisdin?'},
-                {message:'how u diosdin?'},
-                {message:'how u deuoin?'},
-                {message:'how u d1oyin?'},
-                {message:'how u dto23in?'},
-                {message:'how u dt3oin?'},
-                {message:'how u dto54in?'},
-                {message:'how u dtosi5n?'},
-                {message:'how u dtoi5n?'},
-                {message:'Bottom'},
+            this.read();
+            this.getAllMessages();
+
+            Echo.private(`Chat.${this.friend.session.id}`).listen('PrivateChatEvent', e => {
+                    this.read();
+                    this.chats.push({ message: e.letter, type:1, sent_at:'Just Now' });
+                }
+            );
+
+            Echo.private(`Chat.${this.friend.session.id}`).listen('MsgReadEvent', e =>
+                this.chats.forEach(
+                    chat => (chat.id == e.chat.id ? (chat.read_at = e.chat.read_at):'')
                 )
+            );
         }
     }
 </script>

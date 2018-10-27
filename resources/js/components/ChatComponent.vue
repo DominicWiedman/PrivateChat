@@ -6,7 +6,10 @@
                     <div class="card-header">Private Chat App</div>
                     <ul class="list-group">
                         <a href="" @click.prevent="openChat(friend)"  :key="friend.id" v-for="friend in friends">
-                            <li class="list-group-item">{{friend.name}}</li>
+                            <li class="list-group-item">{{ friend.name}}
+                                <span class="text-danger" v-if="friend.session && (friend.session.unreadCount > 0)">{{friend.session.unreadCount}}</span>
+                                <i class="fa fa-circle float-right text-success" v-if="friend.online" aria-hidden="true"></i>
+                            </li>
                         </a>
                     </ul>
                 </div>
@@ -35,14 +38,18 @@
                 friend.session.open = false
             },
             getFriends(){
-                axios.post('getFriends').then(res => this.friends = res.data.data)
+                axios.post('getFriends').then(res => {
+                    this.friends = res.data.data;
+                    this.friends.forEach(
+                        friend => (friend.session ? this.listenForEverySession(friend) : '')
+                    );
+                });
             },
             openChat(friend){
                 if (friend.session){
-                    this.friends.forEach(friend => {
-                        friend.session.open = false
-                    });
-                    friend.session.open = true
+                    this.friends.forEach(friend => {friend.session.open ? friend.session.open = false: ''});
+                    friend.session.open = true;
+                    friend.session.unreadCount = 0;
                 }else{
                     //create session
                     this.createSession(friend);
@@ -56,10 +63,35 @@
                         (friend.session = res.data.data) && (friend.session.open = true);
                     });
             },
+            listenForEverySession(friend){
+                Echo
+                    .private(`Chat.${friend.session.id}`)
+                    .listen('PrivateChatEvent', e => friend.session.open ? '': friend.session.unreadCount++);
+            },
         },
 
         created(){
-            this.getFriends()
+            this.getFriends();
+
+            Echo.channel('Chat').listen('SessionEvent', e => {
+                let friend = this.friends.find(friend => friend.id === e.session_by);
+                friend.session = e.session;
+                this.listenForEverySession(friend);
+            });
+
+            Echo.join('Chat')
+                .here((users) => {
+                    this.friends.forEach(friend=> {
+                        users.forEach(user => {if (user.id === friend.id){friend.online = true} })
+                    })
+                })
+                .joining((user) => {
+                    this.friends.forEach(friend => user.id === friend.id? friend.online = true:'')
+                })
+                .leaving((user) => {
+                    this.friends.forEach(friend => user.id === friend.id? friend.online = false:'')
+                });
+
         },
         components:{MessageComponent},
     }
