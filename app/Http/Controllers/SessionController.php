@@ -12,7 +12,7 @@ class SessionController extends Controller
 {
     public function create(Request $request)
     {
-        $session = Session::create(['user1_id'=>Auth::id(), 'user2_id'=>$request->friend_id]);
+        $session = Session::create(['user1_id'=>Auth::id(), 'user2_id'=>$request->friend_id, 'block' => 0, 'blocked_by' => null]);
         $modifiedSession = new SessionResource($session);
         broadcast(new SessionEvent($modifiedSession, Auth::id()));
         return $modifiedSession;

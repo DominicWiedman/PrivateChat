@@ -8,21 +8,20 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 
-class MsgReadEvent implements ShouldBroadcast
+class BlockEvent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
-
-    public $chat;
-    private $session_id;
+    public $session_id;
+    public $blocked;
     /**
      * Create a new event instance.
      *
      * @return void
      */
-    public function __construct($chat, $session_id)
+    public function __construct($session_id, $blocked)
     {
-        $this->chat = $chat;
         $this->session_id = $session_id;
+        $this->blocked = $blocked;
         $this->dontBroadcastToCurrentUser();
     }
 
@@ -33,6 +32,6 @@ class MsgReadEvent implements ShouldBroadcast
      */
     public function broadcastOn()
     {
-        return new PrivateChannel('Chat.'.$this->session_id);
+        return new PrivateChannel('Chat.'. $this->session_id);
     }
 }

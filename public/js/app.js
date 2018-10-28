@@ -57784,6 +57784,8 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 //
+//
+//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
     props: ['friend'],
@@ -57791,10 +57793,27 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
         return {
             chats: [],
             message: [],
-            session_block: false
+            isTyping: false
         };
     },
 
+    computed: {
+        session: function session() {
+            return this.friend.session;
+        },
+        can: function can() {
+            return this.session.blocked_by == auth.id;
+        }
+    },
+    watch: {
+        message: function message(value) {
+            if (value) {
+                Echo.private('Chat.' + this.friend.session.id).whisper('typing', {
+                    name: auth.name
+                });
+            }
+        }
+    },
     methods: {
         send: function send() {
             var _this = this;
@@ -57824,16 +57843,26 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
             });
         },
         block: function block() {
-            this.session_block = true;
-        },
-        unblock: function unblock() {
-            this.session_block = false;
-        },
-        getAllMessages: function getAllMessages() {
             var _this3 = this;
 
+            this.session.block = true;
+            axios.post('session/' + this.friend.session.id + '/block').then(function (res) {
+                return _this3.session.blocked_by = auth.id;
+            });
+        },
+        unblock: function unblock() {
+            var _this4 = this;
+
+            this.session.block = false;
+            axios.post('session/' + this.friend.session.id + '/unblock').then(function (res) {
+                return _this4.session.blocked_by = null;
+            });
+        },
+        getAllMessages: function getAllMessages() {
+            var _this5 = this;
+
             axios.post('session/' + this.friend.session.id + '/chats').then(function (res) {
-                return _this3.chats = res.data.data;
+                return _this5.chats = res.data.data;
             });
         },
         read: function read() {
@@ -57841,20 +57870,33 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
         }
     },
     created: function created() {
-        var _this4 = this;
+        var _this6 = this;
 
         this.read();
         this.getAllMessages();
 
         Echo.private('Chat.' + this.friend.session.id).listen('PrivateChatEvent', function (e) {
-            _this4.read();
-            _this4.chats.push({ message: e.letter, type: 1, sent_at: 'Just Now' });
+            _this6.read();
+            _this6.chats.push({ message: e.letter, type: 1, sent_at: 'Just Now' });
         });
 
         Echo.private('Chat.' + this.friend.session.id).listen('MsgReadEvent', function (e) {
-            return _this4.chats.forEach(function (chat) {
+            return _this6.chats.forEach(function (chat) {
                 return chat.id == e.chat.id ? chat.read_at = e.chat.read_at : '';
             });
+        });
+
+        Echo.private('Chat.' + this.friend.session.id).listen('BlockEvent', function (e) {
+            return _this6.session.block = e.blocked;
+        });
+
+        Echo.private('Chat.' + this.friend.session.id).listenForWhisper('typing', function (e) {
+            {
+                _this6.isTyping = true;
+                setTimeout(function () {
+                    _this6.isTyping = false;
+                }, 2000);
+            }
         });
     }
 });
@@ -57869,32 +57911,38 @@ var render = function() {
   var _c = _vm._self._c || _h
   return _c("div", { staticClass: "card card-default chat-box" }, [
     _c("div", { staticClass: "card-header" }, [
-      _c("b", { class: { "text-danger": _vm.session_block } }, [
-        _vm._v("\n            " + _vm._s(_vm.friend.name) + "\n            "),
-        _vm.session_block ? _c("span", [_vm._v("(Blocked)")]) : _vm._e()
+      _c("b", { class: { "text-danger": _vm.session.block } }, [
+        _vm._v("\n            " + _vm._s(_vm.friend.name) + " "),
+        _vm.isTyping
+          ? _c("span", { staticClass: "font-italic text-success" }, [
+              _vm._v("   is typing...")
+            ])
+          : _vm._e(),
+        _vm._v(" "),
+        _vm.session.block ? _c("span", [_vm._v("(Blocked)")]) : _vm._e()
       ]),
       _vm._v(" "),
-      _c(
-        "a",
-        {
-          attrs: { href: "" },
-          on: {
-            click: function($event) {
-              $event.preventDefault()
-              return _vm.close($event)
-            }
-          }
-        },
-        [
-          _c("i", {
-            staticClass: "fa fa-times float-right",
-            attrs: { "aria-hidden": "true" }
-          })
-        ]
-      ),
-      _vm._v(" "),
-      _c("div", { staticClass: "float-right mr-xl-4" }, [
+      _c("div", { staticClass: "float-right" }, [
         _vm._m(0),
+        _vm._v("   \n            "),
+        _c(
+          "a",
+          {
+            attrs: { href: "" },
+            on: {
+              click: function($event) {
+                $event.preventDefault()
+                return _vm.close($event)
+              }
+            }
+          },
+          [
+            _c("i", {
+              staticClass: "fa fa-times align-items-center",
+              attrs: { "aria-hidden": "true" }
+            })
+          ]
+        ),
         _vm._v(" "),
         _c(
           "div",
@@ -57903,7 +57951,7 @@ var render = function() {
             attrs: { "aria-labelledby": "dropdownMenuButton" }
           },
           [
-            _vm.session_block
+            _vm.session.block && _vm.can
               ? _c(
                   "button",
                   {
@@ -57918,7 +57966,10 @@ var render = function() {
                   },
                   [_vm._v("UnBlock")]
                 )
-              : _c(
+              : _vm._e(),
+            _vm._v(" "),
+            !_vm.session.block
+              ? _c(
                   "button",
                   {
                     staticClass: "dropdown-item",
@@ -57931,7 +57982,8 @@ var render = function() {
                     }
                   },
                   [_vm._v("Block")]
-                ),
+                )
+              : _vm._e(),
             _vm._v(" "),
             _c(
               "button",
@@ -57964,7 +58016,7 @@ var render = function() {
             "p",
             {
               key: chat.id,
-              staticClass: "card-text",
+              staticClass: "card-text align-bottom",
               class: {
                 "text-right": chat.type == 0,
                 "text-success": chat.read_at != null
@@ -57974,7 +58026,7 @@ var render = function() {
               _vm._v(_vm._s(chat.message) + "\n            "),
               _c("br"),
               _vm._v(" "),
-              _c("span", { staticStyle: { "font-size": "8px" } }, [
+              _c("span", { staticStyle: { "font-size": "8pt" } }, [
                 _vm._v(_vm._s(chat.read_at))
               ])
             ]
@@ -58012,7 +58064,7 @@ var render = function() {
             attrs: {
               type: "text",
               placeholder: "Write your message here...",
-              disabled: _vm.session_block
+              disabled: _vm.session.block
             },
             domProps: { value: _vm.message },
             on: {
@@ -58046,7 +58098,7 @@ var staticRenderFns = [
       },
       [
         _c("i", {
-          staticClass: "fa fa-ellipsis-v",
+          staticClass: "fa fa-tasks align-items-center",
           attrs: { "aria-hidden": "true" }
         })
       ]

@@ -1,38 +1,40 @@
 <template>
     <div class="card card-default chat-box">
         <div class="card-header">
-            <b :class="{'text-danger':session_block}">
-                {{friend.name}}
-                <span v-if="session_block">(Blocked)</span>
+            <b :class="{'text-danger':session.block}">
+                {{friend.name}} <span class="font-italic text-success" v-if="isTyping">   is typing...</span>
+                <span v-if="session.block">(Blocked)</span>
             </b>
             <!-- Close Button -->
-            <a href="" @click.prevent="close">
-                <i class="fa fa-times float-right" aria-hidden="true"></i>
-            </a>
+
             <!-- Close Button ends -->
             <!-- Options -->
-            <div class="float-right mr-xl-4">
-                <a href="" class="" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
+            <div class="float-right">
+                <a href="" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <i class="fa fa-tasks align-items-center" aria-hidden="true"></i>
+                </a>&nbsp;&nbsp;&nbsp;
+                <a href="" @click.prevent="close">
+                    <i class="fa fa-times align-items-center" aria-hidden="true"></i>
                 </a>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="dropdownMenuButton">
-                    <button class="dropdown-item" type="button" v-if="session_block" @click.prevent="unblock">UnBlock</button>
-                    <button class="dropdown-item" type="button" v-else @click.prevent="block">Block</button>
+                    <button class="dropdown-item" type="button" v-if="session.block && can" @click.prevent="unblock">UnBlock</button>
+                    <button class="dropdown-item" type="button" v-if="!session.block" @click.prevent="block">Block</button>
                     <button class="dropdown-item" type="button" @click.prevent="clear">Clear Chat</button>
                 </div>
             </div>
             <!-- Options ends-->
         </div>
         <div class="card-body" v-chat-scroll>
-            <p class="card-text" :class="{'text-right': chat.type == 0, 'text-success':chat.read_at != null}" v-for="chat in chats" :key="chat.id">{{chat.message}}
+            <p class="card-text align-bottom" :class="{'text-right': chat.type == 0, 'text-success':chat.read_at != null}" v-for="chat in chats" :key="chat.id">{{chat.message}}
                 <br>
-                <span style="font-size: 8px">{{chat.read_at}}</span>
+                <span style="font-size: 8pt">{{chat.read_at}}</span>
             </p>
+
             <br>
         </div>
         <form class="card-footer" @submit.prevent="send">
             <div class="form-group">
-                <input type="text" class="form-control" placeholder="Write your message here..." :disabled="session_block" v-model="message">
+                <input type="text" class="form-control" placeholder="Write your message here..." :disabled="session.block" v-model="message">
             </div>
         </form>
     </div>
@@ -45,7 +47,24 @@
             return {
                 chats:[],
                 message:[],
-                session_block:false
+                isTyping:false,
+            }
+        },
+        computed:{
+            session(){
+                return this.friend.session;
+            },
+            can(){
+                return this.session.blocked_by == auth.id;
+            }
+        },
+        watch:{
+            message(value){
+                if (value){
+                    Echo.private(`Chat.${this.friend.session.id}`).whisper('typing', {
+                            name: auth.name
+                        });
+                }
             }
         },
         methods:{
@@ -66,13 +85,21 @@
                 this.$emit('close');
             },
             clear(){
-                axios.post(`session/${this.friend.session.id}/clear`).then(res => (this.chats =[]))
+                axios
+                    .post(`session/${this.friend.session.id}/clear`)
+                    .then(res => (this.chats =[]))
             },
             block(){
-                this.session_block = true
+                this.session.block = true;
+                axios
+                    .post(`session/${this.friend.session.id}/block`)
+                    .then(res => (this.session.blocked_by = auth.id));
             },
             unblock(){
-                this.session_block = false
+                this.session.block = false;
+                axios
+                    .post(`session/${this.friend.session.id}/unblock`)
+                    .then(res => (this.session.blocked_by = null));
             },
             getAllMessages(){
                 axios
@@ -98,6 +125,19 @@
                     chat => (chat.id == e.chat.id ? (chat.read_at = e.chat.read_at):'')
                 )
             );
+
+            Echo.private(`Chat.${this.friend.session.id}`).listen('BlockEvent', e =>
+                (this.session.block = e.blocked)
+            );
+
+            Echo.private(`Chat.${this.friend.session.id}`).listenForWhisper('typing', e => {
+                {
+                    this.isTyping = true
+                    setTimeout(() => {
+                        this.isTyping = false
+                        }, 2000);
+                }
+                });
         }
     }
 </script>
